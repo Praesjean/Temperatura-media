@@ -33,12 +33,12 @@ public class Main {
             );
 
             System.out.println(
-                "Soma das temperaturas: %.2f%n"
+                "Soma das temperaturas: "
                 + map.getSoma()
             );
 
             System.out.println(
-                "Media das temperaturas: %.2f%n"
+                "Media das temperaturas: "
                 + media
             );
 
