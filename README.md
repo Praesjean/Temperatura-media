@@ -1,91 +1,86 @@
-# Análise de Temperatura Média com MapReduce
+# Análise de Temperatura Média com MapReduce e Combiner
 
-Projeto desenvolvido para a disciplina de Big Data com o objetivo de calcular a temperatura média presente no arquivo `forestfireinput.csv`, utilizando a lógica de MapReduce.
+## Descrição
 
-## Objetivo
+Projeto desenvolvido em Java com Maven para calcular a temperatura média dos registros presentes no arquivo `forestfireinput.csv`, utilizando os conceitos de MapReduce e a otimização Combiner.
 
-O programa realiza a leitura do dataset e utiliza a coluna de temperatura, localizada no índice 8 do arquivo CSV.
+O Combiner realiza uma agregação parcial dos dados antes da etapa Reduce, diminuindo a quantidade de informações intermediárias que precisam ser processadas.
 
-O cálculo da média é realizado utilizando:
+O projeto utiliza uma simulação didática das etapas MapReduce em Java, sem a execução distribuída do Apache Hadoop.
 
-**Média = Soma das temperaturas / Quantidade de temperaturas**
-
-Dessa forma, evita-se o cálculo incorreto de média das médias.
-
-## Estrutura do Projeto
+## Estrutura do projeto
 
 ```text
 Temperatura-media/
 ├── datasets/
 │   └── forestfireinput.csv
-├── src/
-│   └── main/
-│       └── java/
-│           ├── Main.java
-│           ├── Map.java
-│           └── Reduce.java
+├── src/main/java/
+│   ├── Main.java
+│   ├── Map.java
+│   ├── Combiner.java
+│   └── Reduce.java
 ├── pom.xml
 └── README.md
 ```
 
-## Classes
+## Funcionamento
 
-### Main.java
+O processamento é dividido em quatro etapas:
 
-Responsável por:
+**1. Map**
 
-- Ler o arquivo `forestfireinput.csv`;
-- Executar a etapa Map;
-- Enviar os resultados para a etapa Reduce;
-- Exibir o resultado final.
+Lê os registros do arquivo CSV e extrai a temperatura, localizada na coluna de índice 8.
 
-### Map.java
+**2. Combiner**
 
-Responsável por:
+Os registros são distribuídos entre três blocos. Cada bloco possui um Combiner responsável por calcular a soma parcial das temperaturas e a quantidade de registros.
 
-- Processar cada linha do dataset;
-- Ignorar o cabeçalho;
-- Obter a temperatura localizada no índice 8;
-- Somar as temperaturas;
-- Contabilizar a quantidade de temperaturas processadas.
+**3. Agrupamento dos resultados**
 
-### Reduce.java
+Os resultados parciais dos três Combiners são reunidos para o processamento final.
 
-Responsável por receber a soma e a quantidade obtidas na etapa Map e calcular a média final:
+**4. Reduce**
 
-```text
-media = soma / quantidade
-```
+Recebe as somas e quantidades parciais, calcula a soma total e divide pela quantidade total de temperaturas.
+
+A fórmula utilizada é:
+
+Média = Soma total das temperaturas / Quantidade total de temperaturas
+
+Essa abordagem evita o erro de calcular a média das médias parciais.
+
+## Resultado
+
+O arquivo contém 517 registros válidos de temperatura.
+
+- Quantidade de temperaturas: 517
+- Soma das temperaturas: 9765,70
+- Temperatura média: **18,89 °C**
+
+A utilização do Combiner mantém o resultado final da atividade anterior, mas reduz de 517 valores individuais para 3 resultados parciais encaminhados ao Reduce nesta simulação.
 
 ## Tecnologias utilizadas
 
 - Java 25
 - Apache Maven
+- Visual Studio Code
 
 ## Execução
 
-Para compilar o projeto:
+No terminal, dentro da pasta do projeto, execute:
 
 ```bash
 mvn compile
 ```
 
-Para executar:
+Em seguida:
 
 ```bash
 mvn exec:java "-Dexec.mainClass=Main"
 ```
 
-## Resultado
+## Conclusão
 
-O dataset possui 517 temperaturas válidas.
+A implementação demonstra o funcionamento da otimização Combiner no modelo MapReduce.
 
-Resultado obtido:
-
-```text
-Quantidade de temperaturas: 517
-Soma das temperaturas: 9765,70
-Media das temperaturas: 18,89
-```
-
-Portanto, a temperatura média encontrada foi de aproximadamente **18,89 °C**.
+Ao realizar agregações parciais antes da etapa Reduce, diminuímos a quantidade de dados intermediários processados, mantendo a precisão do cálculo da temperatura média.

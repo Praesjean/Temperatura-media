@@ -1,41 +1,26 @@
 public class Map {
 
-    private double soma;
-    private int quantidade;
+    public Double processar(String linha) {
 
-    public Map() {
-        this.soma = 0.0;
-        this.quantidade = 0;
-    }
-
-    public void processar(String linha) {
-
+        // Ignora o cabeçalho do CSV
         if (linha.startsWith("X,Y,month,day")) {
-            return;
+            return null;
         }
 
         String[] campos = linha.split(",");
 
-        if (campos.length > 8) {
-
-            try {
-
-                double temperatura =
-                    Double.parseDouble(campos[8]);
-
-                soma += temperatura;
-                quantidade++;
-
-            } catch (NumberFormatException e) {
-            }
+        // Verifica se existe a coluna de temperatura
+        if (campos.length <= 8) {
+            return null;
         }
-    }
 
-    public double getSoma() {
-        return soma;
-    }
+        try {
+            // Temperatura está na coluna de índice 8
+            return Double.parseDouble(campos[8]);
 
-    public int getQuantidade() {
-        return quantidade;
+        } catch (NumberFormatException e) {
+            // Ignora temperaturas inválidas
+            return null;
+        }
     }
 }
