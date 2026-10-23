@@ -1,12 +1,14 @@
-# Análise de Temperatura Média com MapReduce e Combiner
+# Análise de Correlação de Pearson com Hadoop MapReduce
 
 ## Descrição
 
-Projeto desenvolvido em Java com Maven para calcular a temperatura média dos registros presentes no arquivo `forestfireinput.csv`, utilizando os conceitos de MapReduce e a otimização Combiner.
+Projeto desenvolvido em Java com Maven e Apache Hadoop para calcular a correlação de Pearson entre a temperatura e as demais variáveis numéricas do dataset `forestfireinput.csv`.
 
-O Combiner realiza uma agregação parcial dos dados antes da etapa Reduce, diminuindo a quantidade de informações intermediárias que precisam ser processadas.
+A temperatura está localizada na coluna 9 do arquivo CSV (índice 8 no Java).
 
-O projeto utiliza uma simulação didática das etapas MapReduce em Java, sem a execução distribuída do Apache Hadoop.
+O processamento utiliza as etapas Mapper, Combiner e Reducer do Hadoop MapReduce, permitindo calcular correlações a partir de estatísticas parciais sem perder o relacionamento entre os valores de cada registro.
+
+O projeto é executado em modo local no Ubuntu (WSL2), utilizando a API real do Apache Hadoop MapReduce, sem necessidade de configurar HDFS ou YARN.
 
 ## Estrutura do projeto
 
@@ -14,73 +16,168 @@ O projeto utiliza uma simulação didática das etapas MapReduce em Java, sem a 
 Temperatura-media/
 ├── datasets/
 │   └── forestfireinput.csv
-├── src/main/java/
-│   ├── Main.java
-│   ├── Map.java
-│   ├── Combiner.java
-│   └── Reduce.java
+├── src/
+│   └── main/
+│       └── java/
+│           ├── Main.java
+│           ├── CorrelacaoMapper.java
+│           ├── CorrelacaoCombiner.java
+│           ├── CorrelacaoReducer.java
+│           └── EstatisticasWritable.java
 ├── pom.xml
 └── README.md
 ```
 
+A pasta `resultado-correlacoes` é criada automaticamente após a execução do processamento.
+
 ## Funcionamento
 
-O processamento é dividido em quatro etapas:
+O processamento é dividido em quatro etapas principais.
 
-**1. Map**
+### 1. Mapper
 
-Lê os registros do arquivo CSV e extrai a temperatura, localizada na coluna de índice 8.
+O Mapper lê os registros do arquivo CSV e identifica a temperatura de cada linha.
 
-**2. Combiner**
+Em seguida, relaciona a temperatura com cada uma das outras colunas numéricas, ignorando as colunas categóricas `month` e `day`.
 
-Os registros são distribuídos entre três blocos. Cada bloco possui um Combiner responsável por calcular a soma parcial das temperaturas e a quantidade de registros.
+Para cada par válido, gera as estatísticas necessárias ao cálculo da correlação de Pearson.
 
-**3. Agrupamento dos resultados**
+Os valores são extraídos da mesma linha do CSV, preservando a correspondência entre as variáveis.
 
-Os resultados parciais dos três Combiners são reunidos para o processamento final.
+### 2. EstatisticasWritable
 
-**4. Reduce**
+A classe `EstatisticasWritable` implementa a interface `Writable` do Hadoop.
 
-Recebe as somas e quantidades parciais, calcula a soma total e divide pela quantidade total de temperaturas.
+Ela armazena seis estatísticas:
 
-A fórmula utilizada é:
+- Quantidade de pares válidos (`n`);
+- Soma dos valores da variável analisada (`somaX`);
+- Soma das temperaturas (`somaY`);
+- Soma dos quadrados da variável (`somaXQuadrado`);
+- Soma dos quadrados das temperaturas (`somaYQuadrado`);
+- Soma dos produtos entre as duas variáveis (`somaXY`).
 
-Média = Soma total das temperaturas / Quantidade total de temperaturas
+Essas informações são suficientes para calcular a correlação sem precisar armazenar todos os pares de valores até a etapa final.
 
-Essa abordagem evita o erro de calcular a média das médias parciais.
+### 3. Combiner
+
+O Combiner realiza uma agregação local das estatísticas produzidas pelo Mapper.
+
+Ele soma as estatísticas parciais de cada coluna, reduzindo a quantidade de dados intermediários enviados ao Reducer.
+
+O Combiner não calcula correlações individuais. Ele apenas acumula as informações necessárias para o cálculo global.
+
+Isso evita o erro de calcular uma média de correlações parciais.
+
+### 4. Reducer
+
+O Reducer recebe as estatísticas agrupadas por coluna e soma os resultados parciais.
+
+Em seguida, aplica a fórmula de correlação de Pearson:
+
+```text
+                 n × Σxy - (Σx × Σy)
+r = ------------------------------------------------
+    √[(n × Σx² - (Σx)²) × (n × Σy² - (Σy)²)]
+```
+
+O coeficiente `r` varia entre -1 e +1:
+
+- Próximo de +1: correlação linear positiva forte;
+- Próximo de -1: correlação linear negativa forte;
+- Próximo de 0: correlação linear fraca ou inexistente.
+
+O Reducer também verifica se existem registros suficientes e variação nos valores para evitar divisões por zero.
+
+## Integridade dos dados
+
+Para preservar a integridade dos dados durante o processamento, o Mapper extrai os valores de cada par a partir da mesma linha do CSV.
+
+Cada par gera suas próprias estatísticas, que podem ser acumuladas independentemente da divisão dos registros entre os Mappers.
+
+O Combiner e o Reducer somam essas estatísticas, permitindo calcular a correlação global sem combinar incorretamente registros diferentes.
+
+Essa abordagem é adequada ao modelo de processamento distribuído do Hadoop, embora a execução atual do projeto utilize o modo local.
 
 ## Resultado
 
-O arquivo contém 517 registros válidos de temperatura.
+O dataset possui 517 registros.
 
-- Quantidade de temperaturas: 517
-- Soma das temperaturas: 9765,70
-- Temperatura média: **18,89 °C**
+O programa calcula a correlação entre a temperatura (`temp`) e as outras dez colunas numéricas:
 
-A utilização do Combiner mantém o resultado final da atividade anterior, mas reduz de 517 valores individuais para 3 resultados parciais encaminhados ao Reduce nesta simulação.
+- X
+- Y
+- FFMC
+- DMC
+- DC
+- ISI
+- RH
+- wind
+- rain
+- area
+
+Os resultados são armazenados no arquivo:
+
+```text
+resultado-correlacoes/part-r-00000
+```
+
+Cada linha apresenta o nome da variável, seu coeficiente de correlação com a temperatura e a quantidade de pares válidos utilizados no cálculo.
+
+Valores positivos indicam que as variáveis tendem a aumentar juntas. Valores negativos indicam que uma variável tende a diminuir quando a outra aumenta. Correlação não implica causalidade.
 
 ## Tecnologias utilizadas
 
-- Java 25
-- Apache Maven
-- Visual Studio Code
+- Java 17;
+- Apache Hadoop 3.4.3;
+- Apache Maven;
+- Ubuntu no WSL2;
+- Visual Studio Code.
 
 ## Execução
 
-No terminal, dentro da pasta do projeto, execute:
+### 1. Abrir o Ubuntu (WSL)
 
-```bash
-mvn compile
+No terminal do VS Code, execute:
+
+```powershell
+wsl
 ```
 
-Em seguida:
+### 2. Acessar a pasta do projeto
 
 ```bash
-mvn exec:java "-Dexec.mainClass=Main"
+cd /mnt/c/Users/Jean/OneDrive/Documentos/GitHub/Temperatura-media
 ```
+
+### 3. Compilar e executar
+
+```bash
+mvn compile exec:java -Dexec.mainClass=Main
+```
+
+O Hadoop executará o Mapper, o Combiner (quando aplicável) e o Reducer.
+
+### 4. Consultar os resultados
+
+```bash
+cat resultado-correlacoes/part-r-00000
+```
+
+**Importante:** o Hadoop exige que o diretório de saída não exista antes da execução. Para executar novamente, exclua apenas a pasta de resultados:
+
+```bash
+rm -rf resultado-correlacoes
+```
+
+Depois, execute novamente o comando Maven.
 
 ## Conclusão
 
-A implementação demonstra o funcionamento da otimização Combiner no modelo MapReduce.
+O projeto demonstra a utilização do Apache Hadoop MapReduce para calcular a correlação de Pearson entre a temperatura e diferentes variáveis numéricas.
 
-Ao realizar agregações parciais antes da etapa Reduce, diminuímos a quantidade de dados intermediários processados, mantendo a precisão do cálculo da temperatura média.
+O Mapper preserva o relacionamento entre os valores de cada registro, o Combiner realiza agregações parciais e o Reducer calcula as correlações finais.
+
+A utilização de estatísticas acumuláveis permite processar os registros em diferentes blocos sem precisar reunir todos os dados originais em memória.
+
+A implementação utiliza a API real do Hadoop e foi executada em modo local no Ubuntu (WSL2). O código segue o modelo de processamento distribuído do MapReduce, mas não foi validado em um cluster com múltiplos nós.

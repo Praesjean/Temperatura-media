@@ -1,73 +1,61 @@
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
 public class Main {
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
 
-        String arquivo = "datasets/forestfireinput.csv";
+        // Configura o Hadoop para executar localmente, sem HDFS ou YARN.
+        Configuration configuracao = new Configuration();
+        configuracao.set("mapreduce.framework.name", "local");
+        configuracao.set("fs.defaultFS", "file:///");
 
-        Map map = new Map();
-        Reduce reduce = new Reduce();
+        Job job = Job.getInstance(configuracao, "Correlacao Temperatura");
 
-        int numeroBlocos = 3;
+        job.setJarByClass(Main.class);
 
-        // Cria um Combiner para cada bloco
-        List<Combiner> combiners = new ArrayList<>();
+        // Define as classes responsáveis por cada etapa do MapReduce.
+        job.setMapperClass(CorrelacaoMapper.class);
+        job.setCombinerClass(CorrelacaoCombiner.class);
+        job.setReducerClass(CorrelacaoReducer.class);
 
-        for (int i = 0; i < numeroBlocos; i++) {
-            combiners.add(new Combiner());
+        // Tipos dos dados intermediários produzidos pelo Mapper.
+        job.setMapOutputKeyClass(Text.class);
+        job.setMapOutputValueClass(EstatisticasWritable.class);
+
+        // Tipos dos dados finais produzidos pelo Reducer.
+        job.setOutputKeyClass(Text.class);
+        job.setOutputValueClass(Text.class);
+
+        // Utiliza um único Reducer para reunir as correlações na mesma saída.
+        job.setNumReduceTasks(1);
+
+        // Caminhos de entrada e saída do processamento.
+        FileInputFormat.addInputPath(
+                job,
+                new Path("datasets/forestfireinput.csv")
+        );
+
+        FileOutputFormat.setOutputPath(
+                job,
+                new Path("resultado-correlacoes")
+        );
+
+        // Executa o job e informa se terminou com sucesso.
+        boolean sucesso = job.waitForCompletion(true);
+
+        if (sucesso) {
+            System.out.println("Correlacoes calculadas com sucesso!");
+            System.out.println("Resultados na pasta: resultado-correlacoes");
+        } else {
+            System.err.println("Erro ao executar o MapReduce.");
         }
 
-        try {
-            List<String> linhas = Files.readAllLines(Path.of(arquivo));
-
-            int registrosValidos = 0;
-
-            // Etapa MAP + COMBINER
-            for (String linha : linhas) {
-
-                Double temperatura = map.processar(linha);
-
-                if (temperatura != null) {
-
-                    // Distribui os registros entre os blocos
-                    int bloco = registrosValidos % numeroBlocos;
-
-                    // Combiner acumula a soma e a quantidade
-                    combiners.get(bloco).combinar(temperatura);
-
-                    registrosValidos++;
-                }
-            }
-
-            // Exibe os resultados parciais
-            System.out.println("=== RESULTADOS DOS COMBINERS ===");
-
-            for (int i = 0; i < combiners.size(); i++) {
-
-                Combiner combiner = combiners.get(i);
-
-                System.out.println(
-                    "Bloco " + (i + 1) +
-                    " | Soma: " + combiner.getSoma() +
-                    " | Quantidade: " + combiner.getQuantidade()
-                );
-            }
-
-            // Etapa REDUCE
-            double media = reduce.calcularMedia(combiners);
-
-            System.out.println();
-            System.out.println("=== RESULTADO FINAL ===");
-            System.out.println("Quantidade de temperaturas: " + registrosValidos);
-            System.out.printf("Media das temperaturas: %.2f °C%n", media);
-
-        } catch (IOException e) {
-            System.out.println("Erro ao ler o arquivo: " + e.getMessage());
-        }
+        System.exit(sucesso ? 0 : 1);
     }
 }
